@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 from configparser import ConfigParser
@@ -42,19 +43,41 @@ class Config(object):
         self.config = self.__get()
 
 
-class Environments(object):
-    _environments_file = "environments.json"
+class Database(object):
+    def __init__(self, name, version, database, host='localhost', port=5432, **kwargs):
+        # type: (str, str, str, str, int)->None
+        self.name = name
+        self.version = version
+        self.database = database
+        self.host = host
+        self.port = port
+        self.kwargs = kwargs
 
-    def __init__(self):
-        # type: (str)->None
 
+class Manager(object):
+    class Databases(object):
+        _file = "databases.json"
+        def _save(self):
+            with open(self._file, 'w', encoding='utf8') as f:
+                json.dump(self._databases, f)
 
-        def find_postgres_versions():
+        def _load(self):
+            if not os.path.isfile(self._file):
+                self._save()
+            with open(self._file, 'r', encoding='utf8') as f:
+                temp = json.load(f)
+                for database_name, kwargs in temp.items():
+                    self._databases[database_name] = Database(**kwargs)
 
+        def __init__(self):
+            self._databases = {}
+            self._load()
+
+        def __getitem__(self, database_name):
+            # type: (str)->Database
+            return self._databases[database_name]
 
 
 class Interface(object):
     config = Config()
 
-    def __init__(self):
-        self.env = Environment(self.config)
