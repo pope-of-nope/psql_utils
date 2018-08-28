@@ -43,7 +43,7 @@ class Config(object):
         self.config = self.__get()
 
 
-class Database(object):
+class Server(object):
     def __init__(self, name, version, database, host='localhost', port=5432, **kwargs):
         # type: (str, str, str, str, int)->None
         self.name = name
@@ -55,8 +55,30 @@ class Database(object):
 
 
 class Manager(object):
-    class Databases(object):
-        _file = "databases.json"
+    class Servers(object):
+        _file = "servers.json"
+        def _save(self):
+            with open(self._file, 'w', encoding='utf8') as f:
+                json.dump(self._servers, f)
+
+        def _load(self):
+            if not os.path.isfile(self._file):
+                self._save()
+            with open(self._file, 'r', encoding='utf8') as f:
+                temp = json.load(f)
+                for database_name, kwargs in temp.items():
+                    self._servers[database_name] = Server(**kwargs)
+
+        def __init__(self):
+            self._servers = {}
+            self._load()
+
+        def __getitem__(self, database_name):
+            # type: (str)->Server
+            return self._servers[database_name]
+
+    class Users(object):
+        _file = "users.json"
         def _save(self):
             with open(self._file, 'w', encoding='utf8') as f:
                 json.dump(self._databases, f)
@@ -67,15 +89,23 @@ class Manager(object):
             with open(self._file, 'r', encoding='utf8') as f:
                 temp = json.load(f)
                 for database_name, kwargs in temp.items():
-                    self._databases[database_name] = Database(**kwargs)
-
+                    self._databases[database_name] = Server(**kwargs)
         def __init__(self):
-            self._databases = {}
-            self._load()
+            self._users = {}
 
-        def __getitem__(self, database_name):
-            # type: (str)->Database
-            return self._databases[database_name]
+
+    class PGPass(object):
+        _file = "~/.pgpass"
+        _backup = "~/.pgpass.backup"
+
+        def _ensure_backup_exists(self):
+            if not os.path.isfile(self._backup):
+
+
+        def _save(self):
+
+class PGPass(object):
+
 
 
 class Interface(object):
