@@ -3,6 +3,7 @@ import os
 import shutil
 from configparser import ConfigParser
 import logging
+from typing import Dict, List
 
 logger = logging.Logger("psql_utils")
 logger.setLevel(logging.DEBUG)
@@ -43,15 +44,50 @@ class Config(object):
         self.config = self.__get()
 
 
+class PostgresUser(object):
+    def __init__(self, username, password):
+        # type: (str, str)->None
+        self.username = username
+        self.password = password
+
+    def serialize(self):
+        return {"username": self.username, "password": self.password}
+
+    @classmethod
+    def deserialize(cls, data):
+        if isinstance(data, cls):
+            return data
+        elif isinstance(data, dict):
+            return cls(**data)
+        elif isinstance(data, str):
+            return cls(**json.loads(data))
+        elif isinstance(data, list):
+            return [cls.deserialize(d) for d in data]
+
+
 class Server(object):
-    def __init__(self, name, version, database, host='localhost', port=5432, **kwargs):
-        # type: (str, str, str, str, int)->None
+    def __init__(self, name, version, host='localhost', port=5432, users=list()):
+        # type: (str, str, str, int, List[PostgresUser])->None
         self.name = name
         self.version = version
-        self.database = database
         self.host = host
         self.port = port
-        self.kwargs = kwargs
+        self.users = [PostgresUser.deserialize(u) for u in users]
+
+    def serialize(self):
+        return {"name": self.name, "version": self.version, "host": self.host, "port": self.port,
+                "users": [u.serialize() for u in self.users]}
+
+    @classmethod
+    def deserialize(cls, data):
+        if isinstance(data, cls):
+            return data
+        elif isinstance(data, dict):
+            return cls(**data)
+        elif isinstance(data, str):
+            return cls(**json.loads(data))
+        elif isinstance(data, list):
+            return [cls.deserialize(d) for d in data]
 
 
 class Manager(object):
@@ -77,21 +113,21 @@ class Manager(object):
             # type: (str)->Server
             return self._servers[database_name]
 
-    class Users(object):
-        _file = "users.json"
-        def _save(self):
-            with open(self._file, 'w', encoding='utf8') as f:
-                json.dump(self._databases, f)
-
-        def _load(self):
-            if not os.path.isfile(self._file):
-                self._save()
-            with open(self._file, 'r', encoding='utf8') as f:
-                temp = json.load(f)
-                for database_name, kwargs in temp.items():
-                    self._databases[database_name] = Server(**kwargs)
-        def __init__(self):
-            self._users = {}
+    # class Users(object):
+    #     _file = "users.json"
+    #     def _save(self):
+    #         with open(self._file, 'w', encoding='utf8') as f:
+    #             json.dump(self._databases, f)
+    #
+    #     def _load(self):
+    #         if not os.path.isfile(self._file):
+    #             self._save()
+    #         with open(self._file, 'r', encoding='utf8') as f:
+    #             temp = json.load(f)
+    #             for database_name, kwargs in temp.items():
+    #                 self._databases[database_name] = Server(**kwargs)
+    #     def __init__(self):
+    #         self._users = {}
 
 
     # class PGPass(object):
