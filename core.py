@@ -3,7 +3,7 @@ import os
 import shutil
 from configparser import ConfigParser
 import logging
-from typing import Dict, List, Generator
+from typing import Dict, List, Generator, Any, T, Callable, Tuple
 
 logger = logging.Logger("psql_utils")
 logger.setLevel(logging.DEBUG)
@@ -202,31 +202,56 @@ class Interface(object):
     def __iter__(self):
         pass
 
-    def select_server_prompt(self, retry=True):
-        print("Listing servers:")
-        servers = list(self._servers)
+    def _select_prompt(self, prompt, options, say_on_select, say_on_error="Failed to understand selection", retry=True):
+        # type: (str, List[Tuple[T, str], str, str, bool)->T
+        print(prompt)
+        option_names = [o[1] for o in options]
+        option_items = [o[0] for o in options]
 
-        def on_select(s):
-            # type: (Server)->Server
-            print("Understood selection as Server '%s'." % s.name)
-            return s
+        def on_select(chosen):
+            # type: (Any)->Any
+            selected_name = option_names[option_items.index(chosen)]
+            selected_index = option_items.index(chosen)
+            print(say_on_select.format(name=selected_name, index=selected_index))
+            return chosen
 
-        for i, server in enumerate(servers):
-            print("\t[%d.]: " % i, server.name)
-        selection = input("Select a server (by name or number)\n\t")
+        def on_error(e):
+            # type: (Exception)->Any
+            print(say_on_error)
+            if retry:
+                return self._select_prompt(prompt, options, say_on_select, say_on_error=say_on_error, retry=retry)
+            else:
+                raise e
+
+        for i, (option_item, option_name),  in enumerate(options):
+            print("\t[%d.]: " % i, option_name)
+
+        selection = input("Enter your selection (name or number)\n\t")
         try:
             selected_index = int(selection)
-            return on_select(servers[selected_index])
-        except:
+            try:
+                return on_select(option_items[selected_index])
+            except IndexError as e:
+                return on_error(e)
+        except (ValueError, TypeError):
             selected_name = str(selection)
-            for s in servers:
-                if s.name == selected_name:
-                    return on_select(s)
-            print("I didn't understand your selection: ", selection)
-            if retry:
-                self.select_server_prompt(retry=retry)
+            if selected_name in option_names:
+                selected = option_items[option_names.index(selected_name)]
+                return on_select(selected)
             else:
-                raise KeyError(selection)
+                return on_error(KeyError("No option named '%s'" % selected_name))
+
+    def select_server_prompt(self, choices=list(), noun="server", retry=True):
+        # type: (List[Server], str, bool)->Server
+        if not any(choices):
+            choices = list(self._servers)
+
+        return self._select_prompt(
+            "Select a {noun} (by name or number)\n\t".format(noun=noun),
+            [(s, s.name) for s in choices],
+            "Understood selection as Server '{name}'."
+        )
+
 
 
 if __name__ == '__main__':
