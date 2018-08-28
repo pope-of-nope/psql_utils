@@ -245,13 +245,17 @@ class Interface(object):
         # type: (List[Server], str, bool)->Server
         if not any(choices):
             choices = list(self._servers)
+        return self._select_prompt("Select a {noun} (by name or number)\n\t".format(noun=noun),
+                                   [(s, s.name) for s in choices],
+                                   "Understood selection as Server '{name}'.", retry=retry)
 
-        return self._select_prompt(
-            "Select a {noun} (by name or number)\n\t".format(noun=noun),
-            [(s, s.name) for s in choices],
-            "Understood selection as Server '{name}'."
-        )
-
+    def select_credential_prompt(self, choices=list(), noun="credential", retry=True):
+        # type: (List[PGPassEntry], str, bool)->PGPassEntry
+        if not any(choices):
+            choices = list(self._credentials)
+        return self._select_prompt("Select a {noun} (by name or number)\n\t".format(noun=noun),
+                                   [(s, s.to_line()) for s in choices],
+                                   "Understood selection as Server '{name}'.", retry=retry)
 
 
 if __name__ == '__main__':
