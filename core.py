@@ -93,6 +93,7 @@ class Server(object):
 class Manager(object):
     class Servers(object):
         _file = "servers.json"
+
         def _save(self):
             with open(self._file, 'w', encoding='utf8') as f:
                 json.dump(self._servers, f)
