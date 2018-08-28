@@ -167,55 +167,63 @@ class Manager(object):
 
         def _save(self):
             with open(self._file, 'w', encoding='utf8') as f:
-                json.dump(self._servers, f)
+                json.dump([s.serialize() for s in self._servers], f)
 
         def _load(self):
             if not os.path.isfile(self._file):
                 self._save()
             with open(self._file, 'r', encoding='utf8') as f:
                 temp = json.load(f)
-                for database_name, kwargs in temp.items():
-                    self._servers[database_name] = Server(**kwargs)
+                self._servers = [Server.deserialize(s) for s in temp]
 
-        def __init__(self):
-            self._servers = {}
+        def __init__(self, servers=list()):
+            # type: (List[Server])->None
+            self._servers = servers
             self._load()
 
-        def __getitem__(self, database_name):
+        def __iter__(self):
+            # type: ()->Generator[Server]
+            for server in self._servers:
+                yield server
+
+        def __getitem__(self, server_name):
             # type: (str)->Server
-            return self._servers[database_name]
-
-    # class Users(object):
-    #     _file = "users.json"
-    #     def _save(self):
-    #         with open(self._file, 'w', encoding='utf8') as f:
-    #             json.dump(self._databases, f)
-    #
-    #     def _load(self):
-    #         if not os.path.isfile(self._file):
-    #             self._save()
-    #         with open(self._file, 'r', encoding='utf8') as f:
-    #             temp = json.load(f)
-    #             for database_name, kwargs in temp.items():
-    #                 self._databases[database_name] = Server(**kwargs)
-    #     def __init__(self):
-    #         self._users = {}
-
-
-    # class PGPass(object):
-    #     _file = "~/.pgpass"
-    #     _backup = "~/.pgpass.backup"
-    #
-    #     def _ensure_backup_exists(self):
-    #         if not os.path.isfile(self._backup):
-    #
-    #
-    #     def _save(self):
-#
-# class PGPass(object):
-#
+            for s in self:
+                if s.name == server_name:
+                    return s
+            raise KeyError(server_name)
 
 
 class Interface(object):
-    config = Config()
+    _servers = Manager.Servers()
+    _credentials = PGPassFile()
+    _config = Config()
 
+    def __iter__(self):
+        pass
+
+    def select_server_prompt(self, retry=True):
+        print("Listing servers:")
+        servers = list(self._servers)
+
+        for i, server in enumerate(servers):
+            print("\t[%d.]: " % i, server.name)
+        selection = input("Select a server (by name or number)")
+        try:
+            selected_index = int(selection)
+            return servers[selected_index]
+        except:
+            selected_name = str(selection)
+            for s in servers:
+                if s.name == selected_name:
+                    return s
+            print("I didn't understand your selection: ", selection)
+            if retry:
+                self.select_server_prompt(retry=retry)
+            else:
+                raise KeyError(selection)
+
+
+if __name__ == '__main__':
+    manager = Interface()
+    manager.select_server_prompt()
