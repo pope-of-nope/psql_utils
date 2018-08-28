@@ -206,17 +206,22 @@ class Interface(object):
         print("Listing servers:")
         servers = list(self._servers)
 
+        def on_select(s):
+            # type: (Server)->Server
+            print("Understood selection as Server '%s'." % s.name)
+            return s
+
         for i, server in enumerate(servers):
             print("\t[%d.]: " % i, server.name)
-        selection = input("Select a server (by name or number)")
+        selection = input("Select a server (by name or number)\n\t")
         try:
             selected_index = int(selection)
-            return servers[selected_index]
+            return on_select(servers[selected_index])
         except:
             selected_name = str(selection)
             for s in servers:
                 if s.name == selected_name:
-                    return s
+                    return on_select(s)
             print("I didn't understand your selection: ", selection)
             if retry:
                 self.select_server_prompt(retry=retry)
