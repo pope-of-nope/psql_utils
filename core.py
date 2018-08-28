@@ -137,6 +137,17 @@ class PGPassFile(object):
         for item in self.__entries:
             yield item
 
+    def filter(self, server=None, db=None, user=None):
+        # type: (Server, str, str)->List[PGPassEntry]
+        temp: List[PGPassEntry] = list(self)
+        if server is not None:
+            temp = list([e for e in temp if server.host == e.hostname and server.port == e.port])
+        if db is not None:
+            temp = list([e for e in temp if e.db == db])
+        if user is not None:
+            temp = list([e for e in temp if e.username == user])
+        return temp
+
 
 class Server(object):
     def __init__(self, name, version, host='localhost', port=5432):
@@ -260,4 +271,5 @@ class Interface(object):
 
 if __name__ == '__main__':
     manager = Interface()
+    server = manager.select_server_prompt()
     manager.select_server_prompt()
