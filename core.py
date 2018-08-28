@@ -94,15 +94,15 @@ class Manager(object):
             self._users = {}
 
 
-    class PGPass(object):
-        _file = "~/.pgpass"
-        _backup = "~/.pgpass.backup"
-
-        def _ensure_backup_exists(self):
-            if not os.path.isfile(self._backup):
-
-
-        def _save(self):
+    # class PGPass(object):
+    #     _file = "~/.pgpass"
+    #     _backup = "~/.pgpass.backup"
+    #
+    #     def _ensure_backup_exists(self):
+    #         if not os.path.isfile(self._backup):
+    #
+    #
+    #     def _save(self):
 
 class PGPass(object):
 
