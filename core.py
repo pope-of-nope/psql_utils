@@ -214,7 +214,7 @@ class Interface(object):
         pass
 
     def _select_prompt(self, prompt, options, say_on_select, say_on_error="Failed to understand selection", retry=True):
-        # type: (str, List[Tuple[T, str], str, str, bool)->T
+        # type: (str, List[Tuple[T, str]], str, str, bool)->T
         print(prompt)
         option_names = [o[1] for o in options]
         option_items = [o[0] for o in options]
