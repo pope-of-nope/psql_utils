@@ -139,9 +139,9 @@ class Manager(object):
     #
     #
     #     def _save(self):
-
-class PGPass(object):
-
+#
+# class PGPass(object):
+#
 
 
 class Interface(object):
