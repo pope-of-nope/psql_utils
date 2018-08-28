@@ -268,8 +268,14 @@ class Interface(object):
                                    [(s, s.to_line()) for s in choices],
                                    "Understood selection as Server '{name}'.", retry=retry)
 
+    def select_server_and_user(self):
+        # type: ()->Tuple[Server, PGPassEntry]
+        server = self.select_server_prompt()
+        credentials = self._credentials.filter(server=server)
+        credential = self.select_credential_prompt(choices=credentials)
+        return server, credential
+
 
 if __name__ == '__main__':
     manager = Interface()
-    server = manager.select_server_prompt()
-    manager.select_server_prompt()
+    server, credential = manager.select_server_and_user()
