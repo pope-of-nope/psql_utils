@@ -7,7 +7,7 @@ import csv
 
 
 class TaskSwitch(Task):
-    options: List[Tuple[type(Task), str]]
+    options: List[Tuple[type(Task), str]] = []
 
     def on_call(self, *args, **kwargs):
         next_task = self.context.interface.select_prompt("Select a task:", options=self.options)
