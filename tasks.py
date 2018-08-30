@@ -262,6 +262,10 @@ class CreateTableFromCsvTask(Task):
         def make_column_expression(idx):
             # type: (int)->str
             column_name = columns_dict[idx]
+            if column_name.startswith(quotechar) and column_name.endswith(quotechar):
+                pass
+            else:
+                column_name = "{qc}{cn}{qc}".format(qc=quotechar, cn=column_name)
             is_nullable = idx in nullable_columns
             python_type = column_types[idx]
             python_to_pg_type = {int: 'INTEGER', float: 'NUMERIC', str: 'TEXT'}
