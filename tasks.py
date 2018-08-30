@@ -185,7 +185,7 @@ class CreateTableFromCsvTask(Task):
                     return list(["c_%d" % column for column in first_row])
 
         column_names = get_column_names()
-        print(column_names)
+        print("Identified the following column names: ", column_names)
 
 
 class CreateTableTask(TaskSwitch):
