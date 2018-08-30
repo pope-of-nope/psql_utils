@@ -48,9 +48,14 @@ class InputTask(Task):
 
 class Choice(Task):
     @classmethod
-    def init(cls, parent, options, prompt="Select an option: "):
+    def init(cls, parent, prompt, options):
         # type: (Task, str, List[Tuple[str, Any]])->Callable[Any, TaskResult]
-        return parent.context.init(parent.context, prompt=prompt, options=options)
+        return parent.context.init(cls, prompt=prompt, options=options)
+
+    @classmethod
+    def call(cls, parent, prompt, options):
+        # type: (Task, str, List[Tuple[str, Any]])->TaskResult
+        return parent.context.init(cls, prompt=prompt, options=options)()
 
     def __init__(self, context, prompt, options):
         # type: (TaskContext, str, List[Tuple[str, Any]])->None
@@ -153,17 +158,17 @@ class CreateTableFromCsvTask(Task):
             return result.success
 
         has_header: bool = get_result(self.context.init(YesOrNo, "Does this file have a header?  ")())
-        delimiter: str = get_result(Choice.init(self, "Select the delimiter: ", [
+        delimiter: str = get_result(Choice.call(self, "Select the delimiter: ", [
             ("comma", ","),
             ("tab", "\t"),
             ("space", " "),
             ("pipe", "|"),
-        ])())
-        escape_char: str = get_result(Choice.init(self, "Select an escape character: ", [
+        ]))
+        escape_char: str = get_result(Choice.call(self, "Select an escape character: ", [
             ("double quotes", "\""),
             ("single quotes", "'"),
         ]))
-        newline: str = get_result(Choice.init(self, "Newline character: ", [
+        newline: str = get_result(Choice.call(self, "Newline character: ", [
             ("*nix style", "\n"),
             ("windows style", "\r\n"),
         ]))
