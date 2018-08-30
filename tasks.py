@@ -1,4 +1,4 @@
-from core import Task, Interface, TaskContext, logger
+from core import Task, Interface, TaskContext, logger, Cancel, TaskResult
 from typing import Set, List, Dict, Tuple
 import os
 
@@ -8,10 +8,6 @@ class TaskSwitch(Task):
 
     def on_call(self, *args, **kwargs):
         self.context.interface.select_prompt("Select a task:", options=self.options)
-
-
-class Cancel(Exception):
-    pass
 
 
 class InputTask(Task):
@@ -48,6 +44,36 @@ class InputTask(Task):
             self.context.cancel()
 
 
+class YesOrNo(InputTask):
+    @classmethod
+    def call(cls, parent, prompt="Enter yes or no: "):
+        # type: (Task)->TaskResult
+        return parent.context.call(cls, cls__prompt=prompt)
+
+    def __init__(self, context, prompt):
+        # type: (TaskContext, str)->None
+        super().__init__(context)
+        self.prompt = prompt
+
+    def get_prompt(self):
+        return self.prompt
+
+    def sanitize(self, raw_value):
+        if raw_value.lower() in ['y', 'yes', '1']:
+            return True
+        elif raw_value.lower() in ['n', 'no', '0']:
+            return False
+        else:
+            raise ValueError()
+
+    def validate(self, value):
+        try:
+            temp = self.sanitize(value)
+            return True
+        except ValueError():
+            return False
+
+
 class GetFilenameTask(InputTask):
     def get_prompt(self):
         return "Enter the filepath: "
@@ -73,17 +99,17 @@ class GetFilenameTask(InputTask):
     def sanitize(self, raw_value):
         return os.path.normpath(os.path.abspath(raw_value))
 
-    def on_call(self, *args, **kwargs):
-        filepath = input("Enter the filepath: ")
-        if os.path.isfile(filepath):
-            self.context.done(filepath)
-        if not os.path.exists(filepath):
-            logger.error("Path does not exist: %s" % filepath)
+    # def on_call(self, *args, **kwargs):
+    #     filepath = input("Enter the filepath: ")
+    #     if os.path.isfile(filepath):
+    #         self.context.done(filepath)
+    #     if not os.path.exists(filepath):
+    #         logger.error("Path does not exist: %s" % filepath)
 
 
 class RootTask(TaskSwitch):
     options = [
-        (CreateTableTask, "Create a table"),
+        (CreateTableTask, "Create a table from a file"),
     ]
 
 
@@ -95,7 +121,25 @@ class CreateTableTask(TaskSwitch):
 
 class CreateTableFromCsvTask(Task):
     def on_call(self, *args, **kwargs):
-        pass
+        context = self.context
+
+        result = self.context.call(GetFilenameTask)
+        filepath = result.success
+        if filepath is None:
+            self.cancel()
+
+        open_kwargs = {"encoding": "utf8"}
+
+        print("Previewing file: ")
+        with open(filepath, 'r', **open_kwargs) as f:
+            i = 0
+            for line in f:
+                i += 1
+                print(line)
+                print("\n")
+                if i > 3:
+                    break
+        has_header = YesOrNo.call(self, "Does this file have a header?")
 
 
 if __name__ == '__main__':

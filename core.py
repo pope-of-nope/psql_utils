@@ -278,10 +278,15 @@ class Interface(object):
 
 
 class TaskResult(object):
-    def __init__(self, success=None, error=None):
-        # type: (Any, Exception)->None
+    def __init__(self, success=None, error=None, cancel=None):
+        # type: (Any, Exception, Cancel)->None
         self.success = success
         self.error = error
+        self.cancel = cancel
+
+
+class Cancel(Exception):
+    pass
 
 
 class TaskContext(object):
@@ -292,11 +297,14 @@ class TaskContext(object):
 
     def call(self, clazz, *args, **kwargs):
         # type: (type(Task))->TaskResult
+        cls__kwargs = {k.replace("cls__", ""): v for k, v in kwargs.items() if k.startswith("cls__")}
+        call_kwargs = {k: v for k, v in kwargs.items() if not k.startswith("cls__")}
+
         initial_returns_length = len(self._return)
         initial_stack_size = len(self.stack)
 
-        self.stack.append(clazz(self))
-        self.stack[-1].on_call(*args, **kwargs)
+        self.stack.append(clazz(self, **cls__kwargs))
+        self.stack[-1].on_call(*args, **call_kwargs)
 
         finished = self.stack.pop()
         if len(self._return) == initial_stack_size:
@@ -315,6 +323,10 @@ class TaskContext(object):
         # type: (Exception)->None
         self._return.append(TaskResult(error=e))
 
+    def cancel(self, e):
+        # type: (Cancel)->None
+        self._return.append(TaskResult(cancel=e))
+
 
 class Task(object):
     def __init__(self, context):
@@ -323,6 +335,9 @@ class Task(object):
 
     def on_call(self, *args, **kwargs):
         raise NotImplementedError()
+
+    def cancel(self):
+        self.context.cancel(Cancel())
 
 
 if __name__ == '__main__':

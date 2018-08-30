@@ -3,3 +3,4 @@ config.ini
 environments.json
 servers.json
 .pgpass
+test.csv
