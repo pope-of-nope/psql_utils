@@ -296,8 +296,9 @@ class TaskContext(object):
         self._return: List[TaskResult] = []
 
     def init(self, clazz, *args, **kwargs):
-        # type: (type(Task))->Callable
+        # type: (type(Task))->Callable[Any, TaskResult]
         task = clazz(self, *args, **kwargs)
+
         def call():
             return self.call(task, *args, **kwargs)
         return call
