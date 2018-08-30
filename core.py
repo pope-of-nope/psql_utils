@@ -44,52 +44,6 @@ class Config(object):
         self.config = self.__get()
 
 
-# class PostgresUser(object):
-#     def __init__(self, username, password):
-#         # type: (str, str)->None
-#         self.username = username
-#         self.password = password
-#
-#     def serialize(self):
-#         return {"username": self.username, "password": self.password}
-#
-#     @classmethod
-#     def deserialize(cls, data):
-#         if isinstance(data, cls):
-#             return data
-#         elif isinstance(data, dict):
-#             return cls(**data)
-#         elif isinstance(data, str):
-#             return cls(**json.loads(data))
-#         elif isinstance(data, list):
-#             return [cls.deserialize(d) for d in data]
-#
-#
-# class Server(object):
-#     def __init__(self, name, version, host='localhost', port=5432, users=list()):
-#         # type: (str, str, str, int, List[PostgresUser])->None
-#         self.name = name
-#         self.version = version
-#         self.host = host
-#         self.port = port
-#         self.users = [PostgresUser.deserialize(u) for u in users]
-#
-#     def serialize(self):
-#         return {"name": self.name, "version": self.version, "host": self.host, "port": self.port,
-#                 "users": [u.serialize() for u in self.users]}
-#
-#     @classmethod
-#     def deserialize(cls, data):
-#         if isinstance(data, cls):
-#             return data
-#         elif isinstance(data, dict):
-#             return cls(**data)
-#         elif isinstance(data, str):
-#             return cls(**json.loads(data))
-#         elif isinstance(data, list):
-#             return [cls.deserialize(d) for d in data]
-
-
 class PGPassEntry(object):
     def __init__(self, hostname, port, db, username, password):
         # type: (str, int, str, str, str)->None
@@ -139,7 +93,8 @@ class PGPassFile(object):
 
     def filter(self, server=None, db=None, user=None):
         # type: (Server, str, str)->List[PGPassEntry]
-        temp: List[PGPassEntry] = list(self)
+        # temp: List[PGPassEntry] = list(self)
+        temp = list(self)
         if server is not None:
             temp = list([e for e in temp if server.host == e.hostname and server.port == e.port])
         if db is not None:
@@ -292,8 +247,10 @@ class Cancel(Exception):
 class TaskContext(object):
     def __init__(self):
         self.interface = Interface()
-        self.stack: List[Task] = []
-        self._return: List[TaskResult] = []
+        # self.stack: List[Task] = []
+        # self._return: List[TaskResult] = []
+        self.stack = list()
+        self._return = list()
 
     def init(self, clazz, *args, **kwargs):
         # type: (type(Task))->Callable[Any, TaskResult]
