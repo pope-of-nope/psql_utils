@@ -307,9 +307,9 @@ class TaskContext(object):
         self.stack[-1].on_call(*args, **call_kwargs)
 
         finished = self.stack.pop()
-        if len(self._return) == initial_stack_size:
+        if len(self._return) == initial_returns_length:
             return TaskResult()
-        elif len(self._return) == 1 + initial_stack_size:
+        elif len(self._return) == 1 + initial_returns_length:
             return_value = self._return.pop()
             return return_value
         else:

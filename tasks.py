@@ -7,7 +7,8 @@ class TaskSwitch(Task):
     options: List[Tuple[type(Task), str]]
 
     def on_call(self, *args, **kwargs):
-        self.context.interface.select_prompt("Select a task:", options=self.options)
+        next_task = self.context.interface.select_prompt("Select a task:", options=self.options)
+        return self.context.call(next_task)
 
 
 class InputTask(Task):
@@ -124,7 +125,6 @@ class CreateTableFromCsvTask(Task):
             for line in f:
                 i += 1
                 print(line)
-                print("\n")
                 if i > 3:
                     break
         has_header = YesOrNo.call(self, "Does this file have a header?")
