@@ -107,18 +107,6 @@ class GetFilenameTask(InputTask):
     #         logger.error("Path does not exist: %s" % filepath)
 
 
-class RootTask(TaskSwitch):
-    options = [
-        (CreateTableTask, "Create a table from a file"),
-    ]
-
-
-class CreateTableTask(TaskSwitch):
-    options = [
-        (CreateTableFromCsvTask, "From CSV file"),
-    ]
-
-
 class CreateTableFromCsvTask(Task):
     def on_call(self, *args, **kwargs):
         context = self.context
@@ -140,6 +128,18 @@ class CreateTableFromCsvTask(Task):
                 if i > 3:
                     break
         has_header = YesOrNo.call(self, "Does this file have a header?")
+
+
+class CreateTableTask(TaskSwitch):
+    options = [
+        (CreateTableFromCsvTask, "From CSV file"),
+    ]
+
+
+class RootTask(TaskSwitch):
+    options = [
+        (CreateTableTask, "Create a table from a file"),
+    ]
 
 
 if __name__ == '__main__':

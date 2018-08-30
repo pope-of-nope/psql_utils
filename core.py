@@ -293,7 +293,7 @@ class TaskContext(object):
     def __init__(self):
         self.interface = Interface()
         self.stack: List[Task] = []
-        self._return = List[TaskResult] = []
+        self._return: List[TaskResult] = []
 
     def call(self, clazz, *args, **kwargs):
         # type: (type(Task))->TaskResult
