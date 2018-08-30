@@ -7,7 +7,8 @@ import csv
 
 
 class TaskSwitch(Task):
-    options: List[Tuple[type(Task), str]] = []
+    #options: List[Tuple[type(Task), str]] = []
+    options = list()
 
     def on_call(self, *args, **kwargs):
         next_task = self.context.interface.select_prompt("Select a task:", options=self.options)
@@ -160,7 +161,7 @@ class CreateTableFromCsvTask(Task):
             # type: (TaskResult)->Any
             return result.success
 
-        has_header: bool = get_result(self.context.init(YesOrNo, "Does this file have a header?  ")())
+        has_header = get_result(self.context.init(YesOrNo, "Does this file have a header?  ")())
         # delimiter: str = get_result(Choice.call(self, "Select the delimiter: ", [
         #     ("comma", ","),
         #     ("tab", "\t"),
