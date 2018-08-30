@@ -308,7 +308,11 @@ class TaskContext(object):
         initial_stack_size = len(self.stack)
 
         self.stack.append(task)
-        self.stack[-1].on_call(*args, **kwargs)
+        try:
+            self.stack[-1].on_call(*args, **kwargs)
+        except Exception as e:
+            # handles any errors that aren't explicitly handled by the Task.
+            self.error(e)
 
         finished = self.stack.pop()
         if len(self._return) == initial_returns_length:

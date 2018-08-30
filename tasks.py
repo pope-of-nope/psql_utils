@@ -1,5 +1,5 @@
 from core import Task, Interface, TaskContext, logger, Cancel, TaskResult
-from typing import Set, List, Dict, Tuple
+from typing import Set, List, Dict, Tuple, Any, Callable
 import os
 
 
@@ -43,6 +43,28 @@ class InputTask(Task):
         except Cancel:
             print("Cancelling.")
             self.context.cancel()
+
+
+class Choice(Task):
+    @classmethod
+    def init(cls, parent, options, prompt="Select an option: "):
+        # type: (Task, str, List[Tuple[str, Any]])->Callable[Any, TaskResult]
+        return parent.context.init(parent.context, prompt=prompt, options=options)
+
+    def __init__(self, context, prompt, options):
+        # type: (TaskContext, str, List[Tuple[str, Any]])->None
+        super().__init__(context)
+        self.prompt = prompt
+        self.options = options
+
+    def on_call(self, *args, **kwargs):
+        print(self.prompt)
+        for idx, (label, value) in enumerate(self.options):
+            print("\t[%d.] %s" % (idx, label))
+        selected_index = input("Enter a number: ")
+        selected_index = int(selected_index)
+        selected_value = self.options[selected_index][1]
+        self.context.done(selected_value)
 
 
 class YesOrNo(InputTask):
@@ -127,8 +149,15 @@ class CreateTableFromCsvTask(Task):
                 print(line)
                 if i > 3:
                     break
-        has_header = self.context.init_and_call((YesOrNo, "Does this file have a header?  "))
-        delimiter = InputTask.call(self, )
+        has_header = self.context.init(YesOrNo, "Does this file have a header?  ")()
+        delimiter = Choice.init(self, "Select the delimiter: ", [
+            ("comma", ","),
+            ("tab", "\t"),
+        ])()
+        escape_char = Choice.init(self, "Select an escape character: ", [
+            ("double quotes", "\""),
+            ("single quotes", "'"),
+        ])
 
 
 class CreateTableTask(TaskSwitch):
