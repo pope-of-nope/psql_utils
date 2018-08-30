@@ -1,6 +1,7 @@
 from core import Task, Interface, TaskContext, logger, Cancel, TaskResult
 from typing import Set, List, Dict, Tuple, Any, Callable
 import os
+import csv
 
 
 class TaskSwitch(Task):
