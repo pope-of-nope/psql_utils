@@ -278,7 +278,7 @@ class CreateTableFromCsvTask(Task):
         column_expressions = ", ".join([make_column_expression(idx) for idx in range(len(column_names))])
         ddl = """
 CREATE TABLE x.y ({columns});
-COPY TABLE x.y FROM '{filepath}' WITH CSV {header} NULL AS '\\N';
+COPY x.y FROM '{filepath}' WITH CSV {header} NULL AS '\\N';
         """.format(columns=column_expressions, filepath=filepath, header='HEADER' if has_header else '')
         print(ddl)
 
