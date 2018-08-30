@@ -155,6 +155,7 @@ class CreateTableFromCsvTask(Task):
                 print(line)
                 if i > 3:
                     break
+
         def get_result(result):
             # type: (TaskResult)->Any
             return result.success
