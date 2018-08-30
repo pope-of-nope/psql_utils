@@ -8,7 +8,7 @@ class TaskSwitch(Task):
 
     def on_call(self, *args, **kwargs):
         next_task = self.context.interface.select_prompt("Select a task:", options=self.options)
-        return self.context.call(next_task)
+        return self.context.init_and_call(next_task)
 
 
 class InputTask(Task):
@@ -49,7 +49,7 @@ class YesOrNo(InputTask):
     @classmethod
     def call(cls, parent, prompt="Enter yes or no: "):
         # type: (Task)->TaskResult
-        return parent.context.call(cls, cls__prompt=prompt)
+        return parent.context.init_and_call(cls, cls__prompt=prompt)
 
     def __init__(self, context, prompt):
         # type: (TaskContext, str)->None
@@ -112,7 +112,7 @@ class CreateTableFromCsvTask(Task):
     def on_call(self, *args, **kwargs):
         context = self.context
 
-        result = self.context.call(GetFilenameTask)
+        result = self.context.init_and_call(GetFilenameTask)
         filepath = result.success
         if filepath is None:
             self.cancel()
@@ -127,7 +127,8 @@ class CreateTableFromCsvTask(Task):
                 print(line)
                 if i > 3:
                     break
-        has_header = YesOrNo.call(self, "Does this file have a header?")
+        has_header = self.context.init_and_call((YesOrNo, "Does this file have a header?  "))
+        delimiter = InputTask.call(self, )
 
 
 class CreateTableTask(TaskSwitch):
@@ -144,4 +145,4 @@ class RootTask(TaskSwitch):
 
 if __name__ == '__main__':
     context = TaskContext()
-    context.call(RootTask)
+    context.init_and_call(RootTask)

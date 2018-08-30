@@ -3,7 +3,7 @@ import os
 import shutil
 from configparser import ConfigParser
 import logging
-from typing import Dict, List, Generator, Any, Callable, Tuple
+from typing import Dict, List, Generator, Any, Callable, Tuple, Callable
 
 logger = logging.Logger("psql_utils")
 logger.setLevel(logging.DEBUG)
@@ -295,16 +295,20 @@ class TaskContext(object):
         self.stack: List[Task] = []
         self._return: List[TaskResult] = []
 
-    def call(self, clazz, *args, **kwargs):
-        # type: (type(Task))->TaskResult
-        cls__kwargs = {k.replace("cls__", ""): v for k, v in kwargs.items() if k.startswith("cls__")}
-        call_kwargs = {k: v for k, v in kwargs.items() if not k.startswith("cls__")}
+    def init(self, clazz, *args, **kwargs):
+        # type: (type(Task))->Callable
+        task = clazz(self, *args, **kwargs)
+        def call():
+            return self.call(task, *args, **kwargs)
+        return call
 
+    def call(self, task, *args, **kwargs):
+        # type: (Task)->TaskResult
         initial_returns_length = len(self._return)
         initial_stack_size = len(self.stack)
 
-        self.stack.append(clazz(self, **cls__kwargs))
-        self.stack[-1].on_call(*args, **call_kwargs)
+        self.stack.append(task)
+        self.stack[-1].on_call(*args, **kwargs)
 
         finished = self.stack.pop()
         if len(self._return) == initial_returns_length:
@@ -314,6 +318,33 @@ class TaskContext(object):
             return return_value
         else:
             raise ValueError("Invariant violation.")
+
+    def init_and_call(self, clazz, *args, **kwargs):
+        # type: (type(Task))->TaskResult
+        cls__kwargs = {k.replace("cls__", ""): v for k, v in kwargs.items() if k.startswith("cls__")}
+        call_kwargs = {k: v for k, v in kwargs.items() if not k.startswith("cls__")}
+        return self.init(clazz, **cls__kwargs)(*args, **call_kwargs)
+        # return self.call(task, *args, **call_kwargs)
+
+    # def call(self, clazz, *args, **kwargs):
+    #     # type: (type(Task))->TaskResult
+    #     cls__kwargs = {k.replace("cls__", ""): v for k, v in kwargs.items() if k.startswith("cls__")}
+    #     call_kwargs = {k: v for k, v in kwargs.items() if not k.startswith("cls__")}
+    #
+    #     initial_returns_length = len(self._return)
+    #     initial_stack_size = len(self.stack)
+    #
+    #     self.stack.append(clazz(self, **cls__kwargs))
+    #     self.stack[-1].on_call(*args, **call_kwargs)
+    #
+    #     finished = self.stack.pop()
+    #     if len(self._return) == initial_returns_length:
+    #         return TaskResult()
+    #     elif len(self._return) == 1 + initial_returns_length:
+    #         return_value = self._return.pop()
+    #         return return_value
+    #     else:
+    #         raise ValueError("Invariant violation.")
 
     def done(self, return_value):
         # type: (Any)->None
