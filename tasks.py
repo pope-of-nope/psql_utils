@@ -1,3 +1,5 @@
+from collections import defaultdict, Counter
+
 from core import Task, Interface, TaskContext, logger, Cancel, TaskResult
 from typing import Set, List, Dict, Tuple, Any, Callable
 import os
@@ -158,22 +160,26 @@ class CreateTableFromCsvTask(Task):
             return result.success
 
         has_header: bool = get_result(self.context.init(YesOrNo, "Does this file have a header?  ")())
-        delimiter: str = get_result(Choice.call(self, "Select the delimiter: ", [
-            ("comma", ","),
-            ("tab", "\t"),
-            ("space", " "),
-            ("pipe", "|"),
-        ]))
-        escape_char: str = get_result(Choice.call(self, "Select an escape character: ", [
-            ("double quotes", "\""),
-            ("single quotes", "'"),
-        ]))
-        newline: str = get_result(Choice.call(self, "Newline character: ", [
-            ("*nix style", "\n"),
-            ("windows style", "\r\n"),
-        ]))
+        # delimiter: str = get_result(Choice.call(self, "Select the delimiter: ", [
+        #     ("comma", ","),
+        #     ("tab", "\t"),
+        #     ("space", " "),
+        #     ("pipe", "|"),
+        # ]))
+        # quotechar: str = get_result(Choice.call(self, "Select an escape character: ", [
+        #     ("double quotes", "\""),
+        #     ("single quotes", "'"),
+        # ]))
+        # newline: str = get_result(Choice.call(self, "Newline character: ", [
+        #     ("*nix style", "\n"),
+        #     ("windows style", "\r\n"),
+        # ]))
+        delimiter = ","
+        quotechar = "\""
+        newline = "\n"
+
         open_kwargs["newline"] = newline
-        reader_kwargs = {"delimiter": delimiter, "quotechar": escape_char}
+        reader_kwargs = {"delimiter": delimiter, "quotechar": quotechar}
 
         def get_column_names():
             with open(filepath, 'r', **open_kwargs) as f:
@@ -185,7 +191,90 @@ class CreateTableFromCsvTask(Task):
                     return list(["c_%d" % column for column in first_row])
 
         column_names = get_column_names()
+        columns_dict = {idx: name for idx, name in enumerate(column_names)}
+
         print("Identified the following column names: ", column_names)
+
+        def determine_column_types(sample_size=1000):
+            # type: (int)->Tuple[Dict[int, type], Set[int]]
+            with open(filepath, 'r', **open_kwargs) as f:
+                reader = csv.reader(f, **reader_kwargs)
+                null_values = [r"\N", "%s%s" % (quotechar, quotechar)]
+
+                if has_header:
+                    discard = next(reader)
+
+                sample = []
+                for row in reader:
+                    if len(sample) < sample_size:
+                        sample.append(row)
+                    else:
+                        break
+
+                possible_types = {idx: [int, float, str] for idx in columns_dict.keys()}
+                undetermined_columns = [idx for idx in columns_dict.keys()]
+                nullable_columns = set()
+
+                def eliminate_possible_types(column_idx, row_value):
+                    # type: (int, str)->None
+                    if row_value in null_values:
+                        return
+                    if not row_value.isnumeric():
+                        if int in possible_types[column_idx]:
+                            possible_types[column_idx].remove(int)
+                        if float in possible_types[column_idx]:
+                            possible_types[column_idx].remove(float)
+                    if len(possible_types[column_idx]) == 1:
+                        if column_idx in undetermined_columns:
+                            undetermined_columns.remove(column_idx)
+
+                def identify_nullable_columns(column_idx, row_value):
+                    if row_value in null_values:
+                        nullable_columns.add(column_idx)
+
+                for row in sample:
+                    for column_idx in undetermined_columns:
+                        eliminate_possible_types(column_idx, row[column_idx])
+                    for idx, value in enumerate(row):
+                        identify_nullable_columns(idx, value)
+
+                def pick_strictest_type(column_idx):
+                    possible = possible_types[column_idx]
+                    if int in possible:
+                        return int
+                    elif float in possible:
+                        return float
+                    elif str in possible:
+                        return str
+                    elif len(possible) == 1:
+                        return possible[0]
+                    else:
+                        raise ValueError(possible)
+
+                determined_types = {column: pick_strictest_type(column) for column in columns_dict.keys()}
+                return determined_types, nullable_columns
+
+        column_types, nullable_columns = determine_column_types(sample_size=1000)
+        print("Finished determining column types.")
+
+        def make_column_expression(idx):
+            # type: (int)->str
+            column_name = columns_dict[idx]
+            is_nullable = idx in nullable_columns
+            python_type = column_types[idx]
+            python_to_pg_type = {int: 'INTEGER', float: 'NUMERIC', str: 'TEXT'}
+            pg_type = python_to_pg_type[python_type]
+            nullability = "NULL" if is_nullable else "NOT NULL"
+            expression = "{column_name} {pg_type} {nullability}".format(
+                column_name=column_name, nullability=nullability, pg_type=pg_type)
+            return expression
+
+        column_expressions = ", ".join([make_column_expression(idx) for idx in range(len(column_names))])
+        ddl = """
+CREATE TABLE x.y ({columns});
+COPY TABLE x.y FROM '{filepath}' WITH CSV {header} NULL AS '\\N';
+        """.format(columns=column_expressions, filepath=filepath, header='HEADER' if has_header else '')
+        print(ddl)
 
 
 class CreateTableTask(TaskSwitch):
