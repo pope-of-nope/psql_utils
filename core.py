@@ -299,8 +299,8 @@ class TaskContext(object):
         # type: (type(Task))->Callable[Any, TaskResult]
         task = clazz(self, *args, **kwargs)
 
-        def call():
-            return self.call(task, *args, **kwargs)
+        def call(*call_args, **call_kwargs):
+            return self.call(task, *call_args, **call_kwargs)
         return call
 
     def call(self, task, *args, **kwargs):

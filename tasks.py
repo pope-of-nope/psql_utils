@@ -148,21 +148,25 @@ class CreateTableFromCsvTask(Task):
                 print(line)
                 if i > 3:
                     break
-        has_header = self.context.init(YesOrNo, "Does this file have a header?  ")()
-        delimiter = Choice.init(self, "Select the delimiter: ", [
+        def get_result(result):
+            # type: (TaskResult)->Any
+            return result.success
+
+        has_header: bool = get_result(self.context.init(YesOrNo, "Does this file have a header?  ")())
+        delimiter: str = get_result(Choice.init(self, "Select the delimiter: ", [
             ("comma", ","),
             ("tab", "\t"),
             ("space", " "),
             ("pipe", "|"),
-        ])()
-        escape_char = Choice.init(self, "Select an escape character: ", [
+        ])())
+        escape_char: str = get_result(Choice.init(self, "Select an escape character: ", [
             ("double quotes", "\""),
             ("single quotes", "'"),
-        ])
-        newline = Choice.init(self, "Newline character: ", [
+        ]))
+        newline: str = get_result(Choice.init(self, "Newline character: ", [
             ("*nix style", "\n"),
             ("windows style", "\r\n"),
-        ])
+        ]))
         open_kwargs["newline"] = newline
         reader_kwargs = {"delimiter": delimiter, "quotechar": escape_char}
 
