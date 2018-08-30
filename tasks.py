@@ -41,9 +41,9 @@ class InputTask(Task):
         try:
             value = attempt()
             self.context.done(value)
-        except Cancel:
+        except Cancel as e:
             print("Cancelling.")
-            self.context.cancel()
+            self.context.cancel(e)
 
 
 class Choice(Task):
@@ -133,8 +133,6 @@ class GetFilenameTask(InputTask):
 
 class CreateTableFromCsvTask(Task):
     def on_call(self, *args, **kwargs):
-        context = self.context
-
         result = self.context.init_and_call(GetFilenameTask)
         filepath = result.success
         if filepath is None:
@@ -154,11 +152,31 @@ class CreateTableFromCsvTask(Task):
         delimiter = Choice.init(self, "Select the delimiter: ", [
             ("comma", ","),
             ("tab", "\t"),
+            ("space", " "),
+            ("pipe", "|"),
         ])()
         escape_char = Choice.init(self, "Select an escape character: ", [
             ("double quotes", "\""),
             ("single quotes", "'"),
         ])
+        newline = Choice.init(self, "Newline character: ", [
+            ("*nix style", "\n"),
+            ("windows style", "\r\n"),
+        ])
+        open_kwargs["newline"] = newline
+        reader_kwargs = {"delimiter": delimiter, "quotechar": escape_char}
+
+        def get_column_names():
+            with open(filepath, 'r', **open_kwargs) as f:
+                reader = csv.reader(f, **reader_kwargs)
+                first_row = next(reader)
+                if has_header:
+                    return list([c for c in first_row])
+                else:
+                    return list(["c_%d" % column for column in first_row])
+
+        column_names = get_column_names()
+        print(column_names)
 
 
 class CreateTableTask(TaskSwitch):

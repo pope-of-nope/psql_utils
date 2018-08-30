@@ -315,6 +315,8 @@ class TaskContext(object):
             self.error(e)
 
         finished = self.stack.pop()
+        if len(self.stack) != initial_stack_size:
+            raise ValueError("Invariant violation.")
         if len(self._return) == initial_returns_length:
             return TaskResult()
         elif len(self._return) == 1 + initial_returns_length:
