@@ -210,10 +210,10 @@ class Interface(object):
     _credentials = PGPassFile()
     _config = Config()
 
-    def __iter__(self):
+    def __init__(self):
         pass
 
-    def _select_prompt(self, prompt, options, say_on_select, say_on_error="Failed to understand selection", retry=True):
+    def select_prompt(self, prompt, options, say_on_select=None, say_on_error="Failed to understand selection", retry=True):
         # type: (str, List[Tuple[Any, str]], str, str, bool)->Any
         print(prompt)
         option_names = [o[1] for o in options]
@@ -223,14 +223,15 @@ class Interface(object):
             # type: (Any)->Any
             selected_name = option_names[option_items.index(chosen)]
             selected_index = option_items.index(chosen)
-            print(say_on_select.format(name=selected_name, index=selected_index))
+            if say_on_select is not None:
+                print(say_on_select.format(name=selected_name, index=selected_index))
             return chosen
 
         def on_error(e):
             # type: (Exception)->Any
             print(say_on_error)
             if retry:
-                return self._select_prompt(prompt, options, say_on_select, say_on_error=say_on_error, retry=retry)
+                return self.select_prompt(prompt, options, say_on_select=say_on_select, say_on_error=say_on_error, retry=retry)
             else:
                 raise e
 
@@ -256,16 +257,16 @@ class Interface(object):
         # type: (List[Server], str, bool)->Server
         if not any(choices):
             choices = list(self._servers)
-        return self._select_prompt("Select a {noun} (by name or number)\n\t".format(noun=noun),
-                                   [(s, s.name) for s in choices],
+        return self.select_prompt("Select a {noun} (by name or number)\n\t".format(noun=noun),
+                                  [(s, s.name) for s in choices],
                                    "Understood selection as Server '{name}'.", retry=retry)
 
     def select_credential_prompt(self, choices=list(), noun="credential", retry=True):
         # type: (List[PGPassEntry], str, bool)->PGPassEntry
         if not any(choices):
             choices = list(self._credentials)
-        return self._select_prompt("Select a {noun} (by name or number)\n\t".format(noun=noun),
-                                   [(s, s.to_line()) for s in choices],
+        return self.select_prompt("Select a {noun} (by name or number)\n\t".format(noun=noun),
+                                  [(s, s.to_line()) for s in choices],
                                    "Understood selection as Server '{name}'.", retry=retry)
 
     def select_server_and_user(self):
@@ -274,6 +275,54 @@ class Interface(object):
         credentials = self._credentials.filter(server=server)
         credential = self.select_credential_prompt(choices=credentials)
         return server, credential
+
+
+class TaskResult(object):
+    def __init__(self, success=None, error=None):
+        # type: (Any, Exception)->None
+        self.success = success
+        self.error = error
+
+
+class TaskContext(object):
+    def __init__(self):
+        self.interface = Interface()
+        self.stack: List[Task] = []
+        self._return = List[TaskResult] = []
+
+    def call(self, clazz, *args, **kwargs):
+        # type: (type(Task))->TaskResult
+        initial_returns_length = len(self._return)
+        initial_stack_size = len(self.stack)
+
+        self.stack.append(clazz(self))
+        self.stack[-1].on_call(*args, **kwargs)
+
+        finished = self.stack.pop()
+        if len(self._return) == initial_stack_size:
+            return TaskResult()
+        elif len(self._return) == 1 + initial_stack_size:
+            return_value = self._return.pop()
+            return return_value
+        else:
+            raise ValueError("Invariant violation.")
+
+    def done(self, return_value):
+        # type: (Any)->None
+        self._return.append(TaskResult(success=return_value))
+
+    def error(self, e):
+        # type: (Exception)->None
+        self._return.append(TaskResult(error=e))
+
+
+class Task(object):
+    def __init__(self, context):
+        # type: (TaskContext)->None
+        self.context = context
+
+    def on_call(self, *args, **kwargs):
+        raise NotImplementedError()
 
 
 if __name__ == '__main__':
