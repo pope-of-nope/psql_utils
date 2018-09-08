@@ -201,7 +201,7 @@ class CreateTableFromCsvTask(Task):
             # type: (int)->Tuple[Dict[int, type], Set[int]]
             with open(filepath, 'r', **open_kwargs) as f:
                 reader = csv.reader(f, **reader_kwargs)
-                null_values = [r"\N", "%s%s" % (quotechar, quotechar)]
+                null_values = [r"\N", "", "%s%s" % (quotechar, quotechar)]
 
                 if has_header:
                     discard = next(reader)
@@ -221,13 +221,30 @@ class CreateTableFromCsvTask(Task):
                     # type: (int, str)->None
                     if row_value in null_values:
                         return
-                    if not row_value.isnumeric():
+
+                    decimal_count = row_value.count(".")
+                    if decimal_count == 1:
                         if int in possible_types[column_idx]:
+                            print("\tvalue '%s' eliminated type '%s' for column '%s'" % (row_value, int, column_names[column_idx]))
+                            possible_types[column_idx].remove(int)
+                    elif decimal_count > 1:
+                        if int in possible_types[column_idx]:
+                            print("\tvalue '%s' eliminated type '%s' for column '%s'" % (row_value, int, column_names[column_idx]))
                             possible_types[column_idx].remove(int)
                         if float in possible_types[column_idx]:
+                            print("\tvalue '%s' eliminated type '%s' for column '%s'" % (row_value, float, column_names[column_idx]))
                             possible_types[column_idx].remove(float)
+                    if not row_value.replace(".", "").isnumeric():
+                        if int in possible_types[column_idx]:
+                            print("\tvalue '%s' eliminated type '%s' for column '%s'" % (row_value, int, column_names[column_idx]))
+                            possible_types[column_idx].remove(int)
+                        if float in possible_types[column_idx]:
+                            print("\tvalue '%s' eliminated type '%s' for column '%s'" % (row_value, float, column_names[column_idx]))
+                            possible_types[column_idx].remove(float)
+
                     if len(possible_types[column_idx]) == 1:
                         if column_idx in undetermined_columns:
+                            print("Finalized type '%s' for column '%s'" % (possible_types[column_idx][0], column_names[column_idx]))
                             undetermined_columns.remove(column_idx)
 
                 def identify_nullable_columns(column_idx, row_value):
