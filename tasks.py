@@ -249,7 +249,9 @@ class CreateTableFromCsvTask(Task):
 
                 def identify_nullable_columns(column_idx, row_value):
                     if row_value in null_values:
-                        nullable_columns.add(column_idx)
+                        if column_idx not in nullable_columns:
+                            print("\tvalue '%s' identified column '%s' as nullable" % (row_value, column_names[column_idx]))
+                            nullable_columns.add(column_idx)
 
                 for row in sample:
                     for column_idx in undetermined_columns:
