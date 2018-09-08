@@ -141,6 +141,7 @@ class GetFilenameTask(InputTask):
 
 class CreateTableFromCsvTask(Task):
     def on_call(self, *args, **kwargs):
+        DONT_CHECK_NULLS = True
         result = self.context.init_and_call(GetFilenameTask)
         filepath = result.success
         if filepath is None:
@@ -275,7 +276,7 @@ class CreateTableFromCsvTask(Task):
                 determined_types = {column: pick_strictest_type(column) for column in columns_dict.keys()}
                 return determined_types, nullable_columns
 
-        column_types, nullable_columns = determine_column_types(sample_size=1000)
+        column_types, nullable_columns = determine_column_types(sample_size=100000)
         print("Finished determining column types.")
 
         def make_column_expression(idx):
