@@ -14,6 +14,8 @@ FILE_ARGUMENT = sys.argv[1]
 FILE_ARGUMENT = os.path.normpath(os.path.abspath(FILE_ARGUMENT))
 assert os.path.isfile(FILE_ARGUMENT)
 
+STAGING_SCHEMA_NAME = sys.argv[2]
+
 
 def run():
     DONT_CHECK_NULLS = True
@@ -151,11 +153,18 @@ def run():
         return expression
 
     column_expressions = ", ".join([make_column_expression(idx) for idx in range(len(column_names))])
-    ddl = """
-    CREATE TABLE x.y ({columns});
-    COPY x.y FROM '{filepath}' WITH CSV {header} NULL AS '\\N';
-            """.format(columns=column_expressions, filepath=filepath, header='HEADER' if has_header else '')
+
+    filename = os.path.basename(filepath)
+    TABLE_NAME = filename.split(".")[0]
+    sql_filename = filename + ".sql"
+    sql_filepath = os.path.join(os.path.dirname(filepath), sql_filename)
+
+    ddl = """CREATE TABLE {x}.{y} ({columns}); COPY {x}.{y} FROM '{filepath}' WITH CSV {header} NULL AS '\\N';""".format(
+        columns=column_expressions, filepath=filepath, header='HEADER' if has_header else '',
+        x=STAGING_SCHEMA_NAME, y=TABLE_NAME
+    )
     print(ddl)
+
     filename = os.path.basename(filepath)
     sql_filename = filename + ".sql"
     sql_filepath = os.path.join(os.path.dirname(filepath), sql_filename)
