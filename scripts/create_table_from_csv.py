@@ -10,14 +10,14 @@ quotechar = "\""
 newline = "\n"
 
 
-f = sys.argv[1]
-f = os.path.normpath(os.path.abspath(f))
-assert os.path.isfile(f)
+FILE_ARGUMENT = sys.argv[1]
+FILE_ARGUMENT = os.path.normpath(os.path.abspath(FILE_ARGUMENT))
+assert os.path.isfile(FILE_ARGUMENT)
 
 
 def run():
     DONT_CHECK_NULLS = True
-    filepath = f
+    filepath = FILE_ARGUMENT
 
     open_kwargs = {"encoding": "utf8"}
 
