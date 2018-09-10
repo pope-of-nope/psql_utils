@@ -392,7 +392,7 @@ class SQLGrammar(object):
 def run_v2():
     table_name = str(os.path.basename(FILE_ARGUMENT).split(".")[0])
     table = Table(schema=STAGING_SCHEMA_NAME, name=table_name)
-    table.sample(sample_size=1000, verbose=False)
+    table.sample(sample_size=10000, verbose=False)
     table.detect_keys_and_force_to_strings()
     sql = SQLGrammar(table)
     sql.write_ddl_statements_to_file()
