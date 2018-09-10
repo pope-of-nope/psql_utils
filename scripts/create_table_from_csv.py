@@ -174,7 +174,7 @@ class Table(object):
         self.columns = ColumnCollection()
         self.rows = list()
 
-    def sample(self, sample_size):
+    def sample(self, sample_size, verbose=False):
         # type: (int)->None
         filepath = FILE_ARGUMENT
         # header = has_header
@@ -201,6 +201,7 @@ class Table(object):
                 if has_header:
                     header_row = next(reader)
                 for data_row in reader:
+                    self.rows.append(data_row)
                     for idx, value in enumerate(data_row):
                         self.columns.getByIdx(idx).values.add(value)
                     n += 1
@@ -212,16 +213,42 @@ class Table(object):
 
         # infer types.
         for column in self.columns:
-            column.values.infer_types()
+            column.values.infer_types(verbose=verbose)
 
-        for column in self.columns:
-            column.print_summary()
+        if verbose:
+            for column in self.columns:
+                column.print_summary()
+
+    def check_keys(self):
+        """ assumes the primary key will always be made up by the left-most columns. """
+        def check_candidate_key(num_columns):
+            # type: (int)->Column
+            columns = list([self.columns.getByIdx(idx) for idx in range(num_columns)])
+            candidate_key = Column(-1, "candidate_key")
+            for row in self.rows:
+                value = ",".join(['"%s"' % row[idx] for idx in range(num_columns)])
+                candidate_key.values.add(value)
+            candidate_key.values.infer_types()
+            table_entropy = candidate_key.values.max_entropy
+            key_entropy = candidate_key.values.entropy
+            if abs(table_entropy - key_entropy) < 0.001:
+                print("Entropy analysis suggested the following primary key: ")
+                for idx in range(num_columns):
+                    column = self.columns.getByIdx(idx)
+                    column.print_summary()
+                return candidate_key
+
+        for nc in range(5):
+            found = check_candidate_key(nc)
+            if found is not None:
+                break
 
 
 def run_v2():
     table_name = str(os.path.basename(FILE_ARGUMENT).split(".")[0])
     table = Table(schema=STAGING_SCHEMA_NAME, name=table_name)
-    table.sample(sample_size=1000)
+    table.sample(sample_size=1000, verbose=False)
+    table.check_keys()
 
 
 def run():
