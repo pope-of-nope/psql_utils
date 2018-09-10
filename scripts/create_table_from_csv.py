@@ -121,6 +121,31 @@ class ColumnValues(object):
         return H
 
     @property
+    def is_possible_key_column(self):
+        if self.python_type in [float]:
+            return False
+        elif self.python_type in [int, str]:
+            H = self.entropy
+            H0 = self.entropy_if_uniform
+            if abs(H - H0) > 0.00001:
+                return False  # not uniform enough.
+            else:
+                return True
+
+    @property
+    def entropy_if_uniform(self):
+        """ the entropy expected if this column's unique values were uniformly distributed. """
+        unique_values = list(self.__value_counts.keys())
+        num_observations = len(self.__raw_values)
+        expected_counts_if_uniform = float(num_observations) / float(len(unique_values))
+        P = {value: expected_counts_if_uniform / float(num_observations) for value, count in
+             self.__value_counts.items()}
+        assert abs(sum(P.values()) - 1.0) < 0.001, sum(P.values())
+        I = {value: -math.log(P[value], math.e) for value in unique_values}
+        H = sum([P[value] * I[value] for value in unique_values])
+        return H
+
+    @property
     def max_entropy(self):
         num_observations = len(self.__raw_values)
         P = 1.0/float(num_observations)
@@ -141,7 +166,7 @@ class Column(object):
         print("\nColumn #%d - %s" % (self.idx, self.name))
         print("\t\tType: %s" % (self.values.python_type))
         print("\t\tnum_values: %s total (%s unique)" % (num_values_total, num_values_unique))
-        print("\t\tentropy: %s (out of total: %s)" % (self.values.entropy, self.values.max_entropy))
+        print("\t\tentropy: %s (expected if uniform: %s)" % (self.values.entropy, self.values.entropy_if_uniform))
 
 
 class ColumnCollection(object):
@@ -221,6 +246,16 @@ class Table(object):
 
     def check_keys(self):
         """ assumes the primary key will always be made up by the left-most columns. """
+        print("\n\n","###" * 30, "Script will now attempt to detect the table's primary key column(s)...")
+        possible_key_columns = list()
+        for column in self.columns:
+            if column.values.is_possible_key_column:
+                possible_key_columns.append(column)
+
+        print("\nThe following %d columns qualify as potential key columns:" % len(possible_key_columns))
+        for column in possible_key_columns:
+            column.print_summary()
+
         def check_candidate_key(num_columns):
             # type: (int)->Column
             columns = list([self.columns.getByIdx(idx) for idx in range(num_columns)])
