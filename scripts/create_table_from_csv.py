@@ -331,7 +331,7 @@ class SQLGrammar(object):
             schema=self.table.schema,
             table=self.table.name,
             filepath=FILE_ARGUMENT,
-            header=has_header,
+            header=" HEADER " if has_header else " ",
         )
 
     def write_ddl_statements_to_file(self):
