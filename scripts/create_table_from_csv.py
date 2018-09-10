@@ -32,10 +32,23 @@ class ColumnValues(object):
         self.__possible_types = [str, int, float]
         self.python_type = None  # by default
         self.__value_counts = Counter(self.__raw_values)
+        # self.__max_length = 0
 
     def add(self, value):
         # type: (str)->None
+        # self.__max_length = max(self.__max_length, len(value))
         self.__raw_values.append(value)
+
+    @property
+    def sql_type(self):
+        if self.python_type == int:
+            return "INTEGER"
+        elif self.python_type == float:
+            return "NUMERIC"
+        elif self.python_type == str:
+            # postgres TEXT is more useful than you'd expect:
+            # https://www.depesz.com/2010/03/02/charx-vs-varcharx-vs-varchar-vs-text/
+            return "TEXT"
 
     def check_for_invalid_values(self):
         invalid_values = [iv for iv, err in self.invalid_values]
@@ -168,6 +181,14 @@ class Column(object):
         print("\t\tnum_values: %s total (%s unique)" % (num_values_total, num_values_unique))
         print("\t\tentropy: %s (expected if uniform: %s)" % (self.values.entropy, self.values.entropy_if_uniform))
 
+    @property
+    def column_creation_expression(self):
+        return '"{name}" {type} {nullability}'.format(
+            name=self.name,
+            type=self.values.sql_type,
+            nullability="NULL" if self.values.nullable else "NOT NULL"
+        )
+
 
 class ColumnCollection(object):
     def __init__(self):
@@ -292,48 +313,80 @@ class Table(object):
             c = self.columns.getByIdx(idx)
             c.values.python_type = str
 
+
+class SQLGrammar(object):
+    def __init__(self, table):
+        # type: (Table)->None
+        self.table = table
+
+    def make_create_table_statement(self):
+        return "CREATE TABLE {schema}.\"{table}\" ({columns});".format(
+            schema=self.table.schema,
+            table=self.table.name,
+            columns=", ".join([c.column_creation_expression for c in self.table.columns])
+        )
+
+    def copy_statement(self):
+        return "COPY {schema}.\"{table}\" FROM '{filepath}' WITH CSV {header} NULL AS '\\N';".format(
+            schema=self.table.schema,
+            table=self.table.name,
+            filepath=FILE_ARGUMENT,
+            header=has_header,
+        )
+
     def write_ddl_statements_to_file(self):
         filepath = FILE_ARGUMENT
-        column_names = list([c.name for c in self.columns])
-        columns_dict = {c.idx: c.name for c in self.columns}
-        nullable_columns = list([c.idx for c in self.columns if c.values.nullable])
-        column_types = {c.idx: c.values.python_type for c in self.columns}
-
-        def make_column_expression(idx):
-            # type: (int)->str
-            column_name = columns_dict[idx]
-            if column_name.startswith(quotechar) and column_name.endswith(quotechar):
-                pass
-            else:
-                column_name = "{qc}{cn}{qc}".format(qc=quotechar, cn=column_name)
-            is_nullable = idx in nullable_columns
-            python_type = column_types[idx]
-            python_to_pg_type = {int: 'INTEGER', float: 'NUMERIC', str: 'TEXT'}
-            pg_type = python_to_pg_type[python_type]
-            nullability = "NULL" if is_nullable else "NOT NULL"
-            expression = "{column_name} {pg_type} {nullability}".format(
-                column_name=column_name, nullability=nullability, pg_type=pg_type)
-            return expression
-
-        column_expressions = ", ".join([make_column_expression(idx) for idx in range(len(column_names))])
-
-        filename = os.path.basename(filepath)
-        TABLE_NAME = filename.split(".")[0]
-        sql_filename = filename + ".sql"
-        sql_filepath = os.path.join(os.path.dirname(filepath), sql_filename)
-
-        ddl = """CREATE TABLE {x}.{y} ({columns}); COPY {x}.{y} FROM '{filepath}' WITH CSV {header} NULL AS '\\N';""".format(
-            columns=column_expressions, filepath=filepath, header='HEADER' if has_header else '',
-            x=STAGING_SCHEMA_NAME, y=TABLE_NAME
-        )
-        print(ddl)
+        create = self.make_create_table_statement()
+        copy = self.copy_statement()
+        sql = create + "\n" + copy + "\n"
 
         filename = os.path.basename(filepath)
         sql_filename = filename + ".sql"
         sql_filepath = os.path.join(os.path.dirname(filepath), sql_filename)
         with open(sql_filepath, 'w') as f:
-            f.write(ddl + "\n")
+            f.write(sql)
         pass
+
+        # column_names = list([c.name for c in self.columns])
+        # columns_dict = {c.idx: c.name for c in self.columns}
+        # nullable_columns = list([c.idx for c in self.columns if c.values.nullable])
+        # column_types = {c.idx: c.values.python_type for c in self.columns}
+        #
+        # def make_column_expression(idx):
+        #     # type: (int)->str
+        #     column_name = columns_dict[idx]
+        #     if column_name.startswith(quotechar) and column_name.endswith(quotechar):
+        #         pass
+        #     else:
+        #         column_name = "{qc}{cn}{qc}".format(qc=quotechar, cn=column_name)
+        #     is_nullable = idx in nullable_columns
+        #     python_type = column_types[idx]
+        #     python_to_pg_type = {int: 'INTEGER', float: 'NUMERIC', str: 'TEXT'}
+        #     pg_type = python_to_pg_type[python_type]
+        #     nullability = "NULL" if is_nullable else "NOT NULL"
+        #     expression = "{column_name} {pg_type} {nullability}".format(
+        #         column_name=column_name, nullability=nullability, pg_type=pg_type)
+        #     return expression
+        #
+        # column_expressions = ", ".join([make_column_expression(idx) for idx in range(len(column_names))])
+        #
+        # filename = os.path.basename(filepath)
+        # TABLE_NAME = filename.split(".")[0]
+        # sql_filename = filename + ".sql"
+        # sql_filepath = os.path.join(os.path.dirname(filepath), sql_filename)
+        #
+        # ddl = """CREATE TABLE {x}.{y} ({columns}); COPY {x}.{y} FROM '{filepath}' WITH CSV {header} NULL AS '\\N';""".format(
+        #     columns=column_expressions, filepath=filepath, header='HEADER' if has_header else '',
+        #     x=STAGING_SCHEMA_NAME, y=TABLE_NAME
+        # )
+        # print(ddl)
+        #
+        # filename = os.path.basename(filepath)
+        # sql_filename = filename + ".sql"
+        # sql_filepath = os.path.join(os.path.dirname(filepath), sql_filename)
+        # with open(sql_filepath, 'w') as f:
+        #     f.write(ddl + "\n")
+        # pass
 
 
 def run_v2():
@@ -341,7 +394,8 @@ def run_v2():
     table = Table(schema=STAGING_SCHEMA_NAME, name=table_name)
     table.sample(sample_size=1000, verbose=False)
     table.detect_keys_and_force_to_strings()
-    table.write_ddl_statements_to_file()
+    sql = SQLGrammar(table)
+    sql.write_ddl_statements_to_file()
 
 
 def run():
