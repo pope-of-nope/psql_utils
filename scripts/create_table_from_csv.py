@@ -265,7 +265,7 @@ class Table(object):
             for column in self.columns:
                 column.print_summary()
 
-    def detect_keys_and_force_to_strings(self):
+    def detect_primary_keys(self):
         """ assumes the primary key will always be made up by the left-most columns. """
         print("\n\n","###" * 30, "Script will now attempt to detect the table's primary key column(s)...")
         possible_key_columns = list()
@@ -294,11 +294,6 @@ class Table(object):
                     column.print_summary()
                 return candidate_key
 
-        # for nc in range(1, 5):
-        #     found = check_candidate_key(nc)
-        #     if found is not None:
-        #         break
-
         def get_primary_key_length():
             for nc in range(len(self.columns.items)):
                 c = self.columns.getByIdx(nc)
@@ -311,7 +306,14 @@ class Table(object):
         key_length = get_primary_key_length()
         for idx in range(key_length):
             c = self.columns.getByIdx(idx)
-            c.values.python_type = str
+            if c.values.python_type != str:
+                print("Primary key column %s will be forcibly cast to string" % c.name)
+                c.values.python_type = str
+
+        print("All non-primary key columns will be forcibly made nullable.")
+        for idx in range(key_length, len(list(self.columns))):
+            c = self.columns.getByIdx(idx)
+            c.values.nullable = True
 
 
 class SQLGrammar(object):
@@ -347,53 +349,12 @@ class SQLGrammar(object):
             f.write(sql)
         pass
 
-        # column_names = list([c.name for c in self.columns])
-        # columns_dict = {c.idx: c.name for c in self.columns}
-        # nullable_columns = list([c.idx for c in self.columns if c.values.nullable])
-        # column_types = {c.idx: c.values.python_type for c in self.columns}
-        #
-        # def make_column_expression(idx):
-        #     # type: (int)->str
-        #     column_name = columns_dict[idx]
-        #     if column_name.startswith(quotechar) and column_name.endswith(quotechar):
-        #         pass
-        #     else:
-        #         column_name = "{qc}{cn}{qc}".format(qc=quotechar, cn=column_name)
-        #     is_nullable = idx in nullable_columns
-        #     python_type = column_types[idx]
-        #     python_to_pg_type = {int: 'INTEGER', float: 'NUMERIC', str: 'TEXT'}
-        #     pg_type = python_to_pg_type[python_type]
-        #     nullability = "NULL" if is_nullable else "NOT NULL"
-        #     expression = "{column_name} {pg_type} {nullability}".format(
-        #         column_name=column_name, nullability=nullability, pg_type=pg_type)
-        #     return expression
-        #
-        # column_expressions = ", ".join([make_column_expression(idx) for idx in range(len(column_names))])
-        #
-        # filename = os.path.basename(filepath)
-        # TABLE_NAME = filename.split(".")[0]
-        # sql_filename = filename + ".sql"
-        # sql_filepath = os.path.join(os.path.dirname(filepath), sql_filename)
-        #
-        # ddl = """CREATE TABLE {x}.{y} ({columns}); COPY {x}.{y} FROM '{filepath}' WITH CSV {header} NULL AS '\\N';""".format(
-        #     columns=column_expressions, filepath=filepath, header='HEADER' if has_header else '',
-        #     x=STAGING_SCHEMA_NAME, y=TABLE_NAME
-        # )
-        # print(ddl)
-        #
-        # filename = os.path.basename(filepath)
-        # sql_filename = filename + ".sql"
-        # sql_filepath = os.path.join(os.path.dirname(filepath), sql_filename)
-        # with open(sql_filepath, 'w') as f:
-        #     f.write(ddl + "\n")
-        # pass
-
 
 def run_v2():
     table_name = str(os.path.basename(FILE_ARGUMENT).split(".")[0])
     table = Table(schema=STAGING_SCHEMA_NAME, name=table_name)
     table.sample(sample_size=10000, verbose=False)
-    table.detect_keys_and_force_to_strings()
+    table.detect_primary_keys()
     sql = SQLGrammar(table)
     sql.write_ddl_statements_to_file()
 
