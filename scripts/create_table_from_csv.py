@@ -1,7 +1,9 @@
+import re
 import sys
 import os
 import csv
-from typing import List, Dict, Tuple, Set
+from typing import List, Dict, Tuple, Set, Generator
+from collections import Counter
 
 
 has_header = True
@@ -12,9 +14,191 @@ newline = "\n"
 
 FILE_ARGUMENT = sys.argv[1]
 FILE_ARGUMENT = os.path.normpath(os.path.abspath(FILE_ARGUMENT))
+print(FILE_ARGUMENT)
 assert os.path.isfile(FILE_ARGUMENT)
 
 STAGING_SCHEMA_NAME = sys.argv[2]
+
+
+class ColumnValues(object):
+    null_values = ["\\N"]
+    invalid_values = [('""', "Postgres /COPY can't process empty string \"\". Have you cleaned the file yet?")]
+
+    def __init__(self):
+        # type: ()->None
+        self.__raw_values = list()  # list of strings
+        self.nullable = False  # by default.
+        self.__possible_types = [str, int, float]
+        self.python_type = None  # by default
+
+    def add(self, value):
+        # type: (str)->None
+        self.__raw_values.append(value)
+
+    def check_for_invalid_values(self):
+        invalid_values = [iv for iv, err in self.invalid_values]
+        found = [v for v in self.__raw_values if v in invalid_values]
+        if any(found):
+            found = list(set(found))
+            for f in found:
+                err = [err for iv, err in self.invalid_values if iv == f][0]
+                print(err)
+            raise Exception("Invalid values found in file '%s'!" % FILE_ARGUMENT)
+
+    def infer_types(self, verbose=False):
+        # the following types are supported: str (TEXT), int (INTEGER), float (NUMERIC)
+        # possible_types = [str, int, float]
+
+        def force(value, rule, _type):
+            if verbose:
+                print("Rule '%s' forced type '%s' on value '%s'" % (rule, _type, value))
+            self.__possible_types = [_type]
+
+        def remove(value, rule, _type):
+            if _type in self.__possible_types:
+                if verbose:
+                    print("Rule '%s' eliminated type '%s' for value '%s'" % (rule, _type, value))
+                self.__possible_types.remove(_type)
+
+        def eliminate_types(raw_value):
+            if re.search('[a-zA-Z]', raw_value):
+                force(raw_value, "CONTAINS_ALPHA", str)
+                return
+            if raw_value.count(".") > 1:
+                force(raw_value, "MULTI_DECIMAL", str)
+                return
+            elif raw_value.count(".") == 1:
+                remove(raw_value, "SINGLE_DECIMAL", int)
+            elif raw_value.count(".") == 0:
+                if raw_value.startswith("0") and raw_value != "0":
+                    remove(raw_value, "LEADING_ZERO", int)
+
+        # loop over values.
+        for v in [str(v) for v in self.__raw_values]:
+            if len(self.__possible_types) == 1:
+                # there can be only one
+                break
+
+            if v in self.null_values:
+                self.nullable = True
+                continue  # null values don't tell you about types.
+
+            eliminate_types(v)
+
+        # finally, pick the strictest remaining possible type.
+        def pick_strictest_type():
+            if len(self.__possible_types) == 1:
+                return self.__possible_types[0]
+            else:
+                if int in self.__possible_types:
+                    return int
+                elif float in self.__possible_types:
+                    return float
+                elif str in self.__possible_types:
+                    return str
+                else:
+                    raise ValueError()
+
+        self.python_type = pick_strictest_type()
+
+    def get_summary(self):
+        num_values_total = len(self.__raw_values)
+        num_values_unique = len(list(set(self.__raw_values)))
+        value_counts = Counter(self.__raw_values)
+        return num_values_total, num_values_unique, value_counts
+
+
+class Column(object):
+    def __init__(self, idx, name):
+        # type: (int, str)->None
+        self.idx = idx
+        self.name = name
+        self.values = ColumnValues()
+
+    def print_summary(self):
+        num_values_total, num_values_unique, value_counts = self.values.get_summary()
+        print("\nColumn #%d - %s" % (self.idx, self.name))
+        print("\t\tnum_values: %s total (%s unique)" % (num_values_total, num_values_unique))
+
+
+class ColumnCollection(object):
+    def __init__(self):
+        self._items = list()
+
+    def add(self, column):
+        # type: (Column)->None
+        self._items.append(column)
+
+    def __iter__(self):
+        # type: ()->Generator[Column]
+        for item in self._items:
+            yield item
+
+    def getByIdx(self, idx):
+        # type: (int)->Column
+        return [item for item in self._items if item.idx == idx][0]
+
+    def getByName(self, name):
+        # type: (str)->Column
+        return [item for item in self._items if item.name == name][0]
+
+
+class Table(object):
+    def __init__(self, schema, name):
+        # type: (str, str)->None
+        self.schema = schema
+        self.name = name
+        self.columns = ColumnCollection()
+        self.rows = list()
+
+    def sample(self, sample_size):
+        # type: (int)->None
+        filepath = FILE_ARGUMENT
+        # header = has_header
+        open_kwargs = {"encoding": "utf8"}
+        reader_kwargs = {"delimiter": delimiter, "quotechar": quotechar}
+
+        def get_column_names():
+            with open(filepath, 'r', **open_kwargs) as f:
+                reader = csv.reader(f, **reader_kwargs)
+                first_row = next(reader)
+                if has_header:
+                    return list([c for c in first_row])
+                else:
+                    return list(["c_%d" % column for column in first_row])
+
+        column_names = get_column_names()
+        for idx, name in enumerate(column_names):
+            self.columns.add(Column(idx, name))
+
+        def sample_values():
+            n = 0
+            with open(filepath, 'r', **open_kwargs) as f:
+                reader = csv.reader(f, **reader_kwargs)
+                if has_header:
+                    header_row = next(reader)
+                for data_row in reader:
+                    for idx, value in enumerate(data_row):
+                        self.columns.getByIdx(idx).values.add(value)
+                    n += 1
+                    if n > sample_size:
+                        break
+
+        # sample rows.
+        sample_values()
+
+        # infer types.
+        for column in self.columns:
+            column.values.infer_types()
+
+        for column in self.columns:
+            column.print_summary()
+
+
+def run_v2():
+    table_name = str(os.path.basename(FILE_ARGUMENT).split(".")[0])
+    table = Table(schema=STAGING_SCHEMA_NAME, name=table_name)
+    table.sample(sample_size=1000)
 
 
 def run():
@@ -108,7 +292,7 @@ def run():
             def identify_nullable_columns(column_idx, row_value):
                 if row_value in null_values:
                     if column_idx not in nullable_columns:
-                        print("\tvalue '%s' identified column '%s' as nullable" % (row_value, column_names[column_idx]))
+                        # print("\tvalue '%s' identified column '%s' as nullable" % (row_value, column_names[column_idx]))
                         nullable_columns.add(column_idx)
 
             for row in sample:
@@ -173,4 +357,5 @@ def run():
 
 
 if __name__ == '__main__':
-    run()
+    run_v2()
+    # run()
