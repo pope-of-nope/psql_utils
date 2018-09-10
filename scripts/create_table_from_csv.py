@@ -171,24 +171,24 @@ class Column(object):
 
 class ColumnCollection(object):
     def __init__(self):
-        self._items = list()
+        self.items = list()
 
     def add(self, column):
         # type: (Column)->None
-        self._items.append(column)
+        self.items.append(column)
 
     def __iter__(self):
         # type: ()->Generator[Column]
-        for item in self._items:
+        for item in self.items:
             yield item
 
     def getByIdx(self, idx):
         # type: (int)->Column
-        return [item for item in self._items if item.idx == idx][0]
+        return [item for item in self.items if item.idx == idx][0]
 
     def getByName(self, name):
         # type: (str)->Column
-        return [item for item in self._items if item.name == name][0]
+        return [item for item in self.items if item.name == name][0]
 
 
 class Table(object):
@@ -244,7 +244,7 @@ class Table(object):
             for column in self.columns:
                 column.print_summary()
 
-    def check_keys(self):
+    def detect_keys_and_force_to_strings(self):
         """ assumes the primary key will always be made up by the left-most columns. """
         print("\n\n","###" * 30, "Script will now attempt to detect the table's primary key column(s)...")
         possible_key_columns = list()
@@ -252,9 +252,9 @@ class Table(object):
             if column.values.is_possible_key_column:
                 possible_key_columns.append(column)
 
-        print("\nThe following %d columns qualify as potential key columns:" % len(possible_key_columns))
-        for column in possible_key_columns:
-            column.print_summary()
+        # print("\nThe following %d columns qualify as potential key columns:" % len(possible_key_columns))
+        # for column in possible_key_columns:
+        #     column.print_summary()
 
         def check_candidate_key(num_columns):
             # type: (int)->Column
@@ -273,17 +273,75 @@ class Table(object):
                     column.print_summary()
                 return candidate_key
 
-        for nc in range(5):
-            found = check_candidate_key(nc)
-            if found is not None:
-                break
+        # for nc in range(1, 5):
+        #     found = check_candidate_key(nc)
+        #     if found is not None:
+        #         break
+
+        def get_primary_key_length():
+            for nc in range(len(self.columns.items)):
+                c = self.columns.getByIdx(nc)
+                if c.values.entropy == c.values.max_entropy:
+                    return None
+                found = check_candidate_key(nc)
+                if found is not None:
+                    return nc
+
+        key_length = get_primary_key_length()
+        for idx in range(key_length):
+            c = self.columns.getByIdx(idx)
+            c.values.python_type = str
+
+    def write_ddl_statements_to_file(self):
+        filepath = FILE_ARGUMENT
+        column_names = list([c.name for c in self.columns])
+        columns_dict = {c.idx: c.name for c in self.columns}
+        nullable_columns = list([c.idx for c in self.columns if c.values.nullable])
+        column_types = {c.idx: c.values.python_type for c in self.columns}
+
+        def make_column_expression(idx):
+            # type: (int)->str
+            column_name = columns_dict[idx]
+            if column_name.startswith(quotechar) and column_name.endswith(quotechar):
+                pass
+            else:
+                column_name = "{qc}{cn}{qc}".format(qc=quotechar, cn=column_name)
+            is_nullable = idx in nullable_columns
+            python_type = column_types[idx]
+            python_to_pg_type = {int: 'INTEGER', float: 'NUMERIC', str: 'TEXT'}
+            pg_type = python_to_pg_type[python_type]
+            nullability = "NULL" if is_nullable else "NOT NULL"
+            expression = "{column_name} {pg_type} {nullability}".format(
+                column_name=column_name, nullability=nullability, pg_type=pg_type)
+            return expression
+
+        column_expressions = ", ".join([make_column_expression(idx) for idx in range(len(column_names))])
+
+        filename = os.path.basename(filepath)
+        TABLE_NAME = filename.split(".")[0]
+        sql_filename = filename + ".sql"
+        sql_filepath = os.path.join(os.path.dirname(filepath), sql_filename)
+
+        ddl = """CREATE TABLE {x}.{y} ({columns}); COPY {x}.{y} FROM '{filepath}' WITH CSV {header} NULL AS '\\N';""".format(
+            columns=column_expressions, filepath=filepath, header='HEADER' if has_header else '',
+            x=STAGING_SCHEMA_NAME, y=TABLE_NAME
+        )
+        print(ddl)
+
+        filename = os.path.basename(filepath)
+        sql_filename = filename + ".sql"
+        sql_filepath = os.path.join(os.path.dirname(filepath), sql_filename)
+        with open(sql_filepath, 'w') as f:
+            f.write(ddl + "\n")
+        pass
 
 
 def run_v2():
     table_name = str(os.path.basename(FILE_ARGUMENT).split(".")[0])
     table = Table(schema=STAGING_SCHEMA_NAME, name=table_name)
     table.sample(sample_size=1000, verbose=False)
-    table.check_keys()
+    table.detect_keys_and_force_to_strings()
+    table.write_ddl_statements_to_file()
 
 
 def run():
