@@ -4,6 +4,7 @@ import os
 import csv
 from typing import List, Dict, Tuple, Set, Generator
 from collections import Counter
+import math
 
 
 has_header = True
@@ -30,6 +31,7 @@ class ColumnValues(object):
         self.nullable = False  # by default.
         self.__possible_types = [str, int, float]
         self.python_type = None  # by default
+        self.__value_counts = Counter(self.__raw_values)
 
     def add(self, value):
         # type: (str)->None
@@ -100,12 +102,31 @@ class ColumnValues(object):
                     raise ValueError()
 
         self.python_type = pick_strictest_type()
+        self.__value_counts = Counter(self.__raw_values)
 
     def get_summary(self):
         num_values_total = len(self.__raw_values)
         num_values_unique = len(list(set(self.__raw_values)))
         value_counts = Counter(self.__raw_values)
         return num_values_total, num_values_unique, value_counts
+
+    @property
+    def entropy(self):
+        unique_values = list(self.__value_counts.keys())
+        num_observations = len(self.__raw_values)
+        P = {value: float(count)/float(num_observations) for value, count in self.__value_counts.items()}
+        assert abs(sum(P.values()) - 1.0) < 0.001, sum(P.values())
+        I = {value: -math.log(P[value], math.e) for value in unique_values}
+        H = sum([P[value]*I[value] for value in unique_values])
+        return H
+
+    @property
+    def max_entropy(self):
+        num_observations = len(self.__raw_values)
+        P = 1.0/float(num_observations)
+        I = -math.log(P, math.e)
+        H = P*I*num_observations
+        return H
 
 
 class Column(object):
@@ -118,7 +139,9 @@ class Column(object):
     def print_summary(self):
         num_values_total, num_values_unique, value_counts = self.values.get_summary()
         print("\nColumn #%d - %s" % (self.idx, self.name))
+        print("\t\tType: %s" % (self.values.python_type))
         print("\t\tnum_values: %s total (%s unique)" % (num_values_total, num_values_unique))
+        print("\t\tentropy: %s (out of total: %s)" % (self.values.entropy, self.values.max_entropy))
 
 
 class ColumnCollection(object):
