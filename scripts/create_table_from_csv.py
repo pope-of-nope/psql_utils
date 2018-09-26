@@ -321,6 +321,9 @@ class SQLGrammar(object):
         # type: (Table)->None
         self.table = table
 
+    def make_drop_table_statement(self):
+        return "DROP TABLE IF EXISTS {schema}.\"{table}\";".format(schema=self.table.schema, table=self.table.name)
+
     def make_create_table_statement(self):
         return "CREATE TABLE {schema}.\"{table}\" ({columns});".format(
             schema=self.table.schema,
@@ -338,9 +341,10 @@ class SQLGrammar(object):
 
     def write_ddl_statements_to_file(self):
         filepath = FILE_ARGUMENT
+        drop = self.make_drop_table_statement()
         create = self.make_create_table_statement()
         copy = self.copy_statement()
-        sql = create + "\n" + copy + "\n"
+        sql = drop + "\n" + create + "\n" + copy + "\n"
 
         filename = os.path.basename(filepath)
         sql_filename = filename + ".sql"
